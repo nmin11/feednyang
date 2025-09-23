@@ -19,7 +19,7 @@ This is a Discord bot for tech blog feeds built using AWS infrastructure managed
 
 ### AWS Infrastructure
 
-- **EventBridge**: 매 1시간 간격으로 Lambda 호출 (단, 한국 시간 기준 오전 1시부터 7시까지는 호출하지 않음)
+- **EventBridge**: 매 1시간 간격으로 Lambda 호출 (단, 한국 시간 기준 자정부터 7시까지는 호출하지 않음)
 - **Lambda**: 기술 블로그의 RSS 피드를 모아오고, 중복 피드를 제거한 작업을 거친 후에, 디스코드 봇에게 메시지 전파를 요청
 
 ## Common Commands
@@ -84,6 +84,11 @@ When adding Lambda functions or other AWS resources:
 
 The project follows Pulumi's infrastructure-as-code patterns with TypeScript for type safety and developer experience.
 
-## Conventions
+## Convention & Rules
 
 - 시크릿 값은 코드 및 설정 파일에서 유출하지 않도록 한다.
+- `pulumi` 명령어는 사용자가 직접 터미널에 입력해 확인할 수 있도록 한다.
+- Indent
+  - TypeScript: 2
+  - Go: Tabs 간격
+- JSON 표현 시 의미 없는 마지막 쉼표(`,`) 생략
