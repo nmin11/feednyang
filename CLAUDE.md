@@ -9,6 +9,7 @@ This is a Discord bot for tech blog feeds built using AWS infrastructure managed
 **Key Feature**: 유명 빅테크 기업들의 새로운 기술 블로그 피드를 디스코드 봇을 통해 디스코드 채널에 전파한다.
 
 - [아키텍처 다이어그램](./docs/architecture-diagram.svg)
+- [MongoDB 스키마](./docs/mongodb-schema.md)
 
 ## Tech Stack
 
