@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(GOOS=linux GOARCH=amd64 go build -o bootstrap feednyang-rss-feed.go)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
