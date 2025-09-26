@@ -8,6 +8,7 @@
     "dependencies": {
         "@pulumi/aws": "^7.0.0",
         "@pulumi/awsx": "^3.0.0",
+        "@pulumi/mongodbatlas": "^3.36.0",
         "@pulumi/pulumi": "^3.113.0"
     }
 }
