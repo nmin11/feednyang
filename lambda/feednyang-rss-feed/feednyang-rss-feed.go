@@ -65,10 +65,10 @@ var techBlogFeeds = []struct {
 	{"NHN Cloud Meetup", "https://meetup.nhncloud.com/rss"},
 	{"ByteByteGo Newsletter", "https://blog.bytebytego.com/feed"},
 	{"Netflix TechBlog", "https://netflixtechblog.com/feed"},
-	{"The GitHub Blog", "https://github.blog/engineering/feed/"},
+	{"The GitHub Blog", "https://github.blog/engineering/feed"},
 	{"Engineering at Slack", "https://slack.engineering/feed"},
 	{"The Airbnb Tech Blog", "https://medium.com/feed/airbnb-engineering"},
-	{"Spotify Engineering", "https://engineering.atspotify.com/feed/"},
+	{"Spotify Engineering", "https://engineering.atspotify.com/feed"},
 	{"Pinterest Engineering", "https://medium.com/feed/@Pinterest_Engineering"},
 }
 
