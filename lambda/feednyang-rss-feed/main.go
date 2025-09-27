@@ -22,8 +22,7 @@ type Feed struct {
 	BlogName       string    `bson:"blogName" json:"blogName"`
 	RssURL         string    `bson:"rssUrl" json:"rssUrl"`
 	AddedAt        time.Time `bson:"addedAt" json:"addedAt"`
-	LastSentTime   time.Time `bson:"lastSentTime" json:"lastSentTime"`
-	LastPostTitle  string    `bson:"lastPostTitle" json:"lastPostTitle"`
+	LastPostLink   string    `bson:"lastPostLink" json:"lastPostLink"`
 	TotalPostsSent int       `bson:"totalPostsSent" json:"totalPostsSent"`
 }
 
@@ -35,9 +34,9 @@ type DiscordChannel struct {
 }
 
 type LambdaEvent struct {
-	Source     string      `json:"source,omitempty"`
-	DetailType string      `json:"detail-type,omitempty"`
-	Detail     interface{} `json:"detail,omitempty"`
+	Source     string `json:"source,omitempty"`
+	DetailType string `json:"detail-type,omitempty"`
+	Detail     any    `json:"detail,omitempty"`
 }
 
 type LambdaResponse struct {
@@ -148,8 +147,7 @@ func initializeDefaultChannels(ctx context.Context, client *mongo.Client) error 
 				BlogName:       feedInfo.Name,
 				RssURL:         feedInfo.URL,
 				AddedAt:        time.Now(),
-				LastSentTime:   time.Now(),
-				LastPostTitle:  "",
+				LastPostLink:   "",
 				TotalPostsSent: 0,
 			})
 		}
@@ -224,19 +222,8 @@ func fetchAndProcessFeeds(ctx context.Context, client *mongo.Client) (int, error
 			time.Sleep(1 * time.Second)
 
 			for _, item := range feed.Items {
-				var publishedAt time.Time
-				if item.PublishedParsed != nil {
-					publishedAt = *item.PublishedParsed
-				} else {
-					continue
-				}
-
-				if !feedConfig.LastSentTime.IsZero() && publishedAt.Before(feedConfig.LastSentTime) {
-					continue
-				}
-
-				if feedConfig.LastPostTitle == item.Title {
-					continue
+				if feedConfig.LastPostLink == item.Link {
+					break
 				}
 
 				content := fmt.Sprintf(
@@ -252,8 +239,7 @@ func fetchAndProcessFeeds(ctx context.Context, client *mongo.Client) (int, error
 					continue
 				}
 
-				channel.Feeds[i].LastSentTime = publishedAt
-				channel.Feeds[i].LastPostTitle = item.Title
+				channel.Feeds[i].LastPostLink = item.Link
 				channel.Feeds[i].TotalPostsSent++
 
 				channelNewItemsCount++
