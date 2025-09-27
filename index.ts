@@ -71,7 +71,7 @@ new aws.iam.RolePolicy("eventbridge-lambda-policy", {
 
 const scheduleRule = new aws.cloudwatch.EventRule("rss-feed-schedule", {
   description: "Trigger RSS feed check every hour (except 00:00-07:00 KST)",
-  scheduleExpression: "cron(0 15-23,0-14 * * ? *)"
+  scheduleExpression: "cron(0 23,0-14 * * ? *)"
 });
 
 new aws.lambda.Permission("allow-eventbridge", {
