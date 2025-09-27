@@ -22,6 +22,7 @@ type Feed struct {
 	BlogName       string    `bson:"blogName" json:"blogName"`
 	RssURL         string    `bson:"rssUrl" json:"rssUrl"`
 	AddedAt        time.Time `bson:"addedAt" json:"addedAt"`
+	LastSentTime   time.Time `bson:"lastSentTime" json:"lastSentTime"`
 	LastPostLink   string    `bson:"lastPostLink" json:"lastPostLink"`
 	TotalPostsSent int       `bson:"totalPostsSent" json:"totalPostsSent"`
 }
@@ -143,10 +144,12 @@ func initializeDefaultChannels(ctx context.Context, client *mongo.Client) error 
 		}
 
 		for _, feedInfo := range techBlogFeeds {
+			now := time.Now()
 			channel.Feeds = append(channel.Feeds, Feed{
 				BlogName:       feedInfo.Name,
 				RssURL:         feedInfo.URL,
-				AddedAt:        time.Now(),
+				AddedAt:        now,
+				LastSentTime:   now,
 				LastPostLink:   "",
 				TotalPostsSent: 0,
 			})
@@ -226,6 +229,10 @@ func fetchAndProcessFeeds(ctx context.Context, client *mongo.Client) (int, error
 					break
 				}
 
+				if item.PublishedParsed != nil && item.PublishedParsed.Before(feedConfig.LastSentTime) {
+					continue
+				}
+
 				content := fmt.Sprintf(
 					"📝 %s\n**🚀 %s**\n🔗 %s",
 					feedConfig.BlogName,
@@ -239,6 +246,7 @@ func fetchAndProcessFeeds(ctx context.Context, client *mongo.Client) (int, error
 					continue
 				}
 
+				channel.Feeds[i].LastSentTime = time.Now()
 				channel.Feeds[i].LastPostLink = item.Link
 				channel.Feeds[i].TotalPostsSent++
 
