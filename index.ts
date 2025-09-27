@@ -40,6 +40,35 @@ const feednyangRssFeedFunc = new aws.lambda.Function("feednyang-rss-feed", {
   timeout: 300
 });
 
+const feednyangCommandFunc = new aws.lambda.Function("feednyang-command", {
+  code: new pulumi.asset.AssetArchive({
+    ".": new pulumi.asset.FileArchive("./lambda/feednyang-command"),
+  }),
+  runtime: "provided.al2023",
+  handler: "bootstrap",
+  role: lambdaRole.arn,
+  environment: {
+    variables: {
+      MONGODB_URI: config.require("mongodb-uri"),
+      DISCORD_PUBLIC_KEY: config.require("discord-public-key")
+    }
+  },
+  timeout: 30
+});
+
+const feednyangCommandFuncUrl = new aws.lambda.FunctionUrl("feednyang-command-url", {
+  functionName: feednyangCommandFunc.name,
+  authorizationType: "NONE",
+  cors: {
+    allowCredentials: false,
+    allowHeaders: ["content-type", "x-signature-ed25519", "x-signature-timestamp"],
+    allowMethods: ["POST"],
+    allowOrigins: ["*"],
+    exposeHeaders: [],
+    maxAge: 86400
+  }
+});
+
 const eventBridgeRole = new aws.iam.Role("eventbridge-lambda-role", {
   assumeRolePolicy: JSON.stringify({
     Version: "2012-10-17",
@@ -106,5 +135,7 @@ new aws.cloudwatch.EventTarget("lambda-target-saturday", {
 });
 
 export const feednyangRssFeedArn = feednyangRssFeedFunc.arn;
+export const feednyangCommandArn = feednyangCommandFunc.arn;
+export const feednyangCommandUrl = feednyangCommandFuncUrl.functionUrl;
 export const weekdayScheduleRuleArn = weekdayScheduleRule.arn;
 export const saturdayScheduleRuleArn = saturdayScheduleRule.arn;

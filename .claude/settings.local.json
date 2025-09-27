@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(GOOS=linux GOARCH=amd64 go build -o bootstrap main.go)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(go get:*)",
+      "Bash(go mod init:*)",
+      "Bash(go mod:*)",
+      "Bash(go build:*)"
     ],
     "deny": [],
     "ask": []
