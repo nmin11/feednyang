@@ -69,23 +69,42 @@ new aws.iam.RolePolicy("eventbridge-lambda-policy", {
   }))
 });
 
-const scheduleRule = new aws.cloudwatch.EventRule("rss-feed-schedule", {
-  description: "Trigger RSS feed check every hour (except 00:00-07:00 KST)",
-  scheduleExpression: "cron(0 23,0-14 * * ? *)"
+const weekdayScheduleRule = new aws.cloudwatch.EventRule("rss-feed-weekday-schedule", {
+  description: "Trigger RSS feed check on weekdays at 08,12,18,22 KST",
+  scheduleExpression: "cron(0 23,3,9,13 ? * MON-FRI *)"
 });
 
-new aws.lambda.Permission("allow-eventbridge", {
-  statementId: "AllowExecutionFromEventBridge",
+const saturdayScheduleRule = new aws.cloudwatch.EventRule("rss-feed-saturday-schedule", {
+  description: "Trigger RSS feed check on Saturday at 12 KST",
+  scheduleExpression: "cron(0 3 ? * SAT *)"
+});
+
+new aws.lambda.Permission("allow-eventbridge-weekday", {
+  statementId: "AllowExecutionFromEventBridgeWeekday",
   action: "lambda:InvokeFunction",
   function: feednyangRssFeedFunc.name,
   principal: "events.amazonaws.com",
-  sourceArn: scheduleRule.arn
+  sourceArn: weekdayScheduleRule.arn
 });
 
-new aws.cloudwatch.EventTarget("lambda-target", {
-  rule: scheduleRule.name,
+new aws.lambda.Permission("allow-eventbridge-saturday", {
+  statementId: "AllowExecutionFromEventBridgeSaturday",
+  action: "lambda:InvokeFunction",
+  function: feednyangRssFeedFunc.name,
+  principal: "events.amazonaws.com",
+  sourceArn: saturdayScheduleRule.arn
+});
+
+new aws.cloudwatch.EventTarget("lambda-target-weekday", {
+  rule: weekdayScheduleRule.name,
+  arn: feednyangRssFeedFunc.arn
+});
+
+new aws.cloudwatch.EventTarget("lambda-target-saturday", {
+  rule: saturdayScheduleRule.name,
   arn: feednyangRssFeedFunc.arn
 });
 
 export const feednyangRssFeedArn = feednyangRssFeedFunc.arn;
-export const scheduleRuleArn = scheduleRule.arn;
+export const weekdayScheduleRuleArn = weekdayScheduleRule.arn;
+export const saturdayScheduleRuleArn = saturdayScheduleRule.arn;
