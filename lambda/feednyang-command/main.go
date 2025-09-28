@@ -26,6 +26,7 @@ type Feed struct {
 	BlogName       string    `bson:"blogName" json:"blogName"`
 	RssURL         string    `bson:"rssUrl" json:"rssUrl"`
 	AddedAt        time.Time `bson:"addedAt" json:"addedAt"`
+	LastSentTime   time.Time `bson:"lastSentTime" json:"lastSentTime"`
 	LastPostLink   string    `bson:"lastPostLink" json:"lastPostLink"`
 	TotalPostsSent int       `bson:"totalPostsSent" json:"totalPostsSent"`
 }
@@ -273,11 +274,21 @@ func handleAddCommand(ctx context.Context, channelID string, feedURL string) Dis
 		}
 	}
 
+	var lastPostLink string
+	var lastSentTime time.Time = time.Now()
+	if len(feed.Items) > 0 {
+		lastPostLink = feed.Items[0].Link
+		if feed.Items[0].PublishedParsed != nil {
+			lastSentTime = *feed.Items[0].PublishedParsed
+		}
+	}
+
 	newFeed := Feed{
 		BlogName:       feed.Title,
 		RssURL:         feedURL,
 		AddedAt:        time.Now(),
-		LastPostLink:   "",
+		LastSentTime:   lastSentTime,
+		LastPostLink:   lastPostLink,
 		TotalPostsSent: 0,
 	}
 
