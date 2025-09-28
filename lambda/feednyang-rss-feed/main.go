@@ -110,7 +110,7 @@ func sendDiscordMessage(channelID string, content string) error {
 	return nil
 }
 
-func initializeDefaultChannels(ctx context.Context, client *mongo.Client) error {
+func initializeDefaultChannels(ctx context.Context, client *mongo.Client, fp *gofeed.Parser) error {
 	defaultChannelIDs := os.Getenv("DEFAULT_DISCORD_CHANNEL_IDS")
 	if defaultChannelIDs == "" {
 		log.Println("No default channel IDs provided, skipping initialization")
@@ -145,14 +145,30 @@ func initializeDefaultChannels(ctx context.Context, client *mongo.Client) error 
 
 		for _, feedInfo := range techBlogFeeds {
 			now := time.Now()
+
+			var lastPostLink string
+			var lastSentTime time.Time = now
+
+			feed, err := fp.ParseURL(feedInfo.URL)
+			if err != nil {
+				log.Printf("Failed to parse feed %s during initialization: %v", feedInfo.Name, err)
+			} else if len(feed.Items) > 0 {
+				lastPostLink = feed.Items[0].Link
+				if feed.Items[0].PublishedParsed != nil {
+					lastSentTime = *feed.Items[0].PublishedParsed
+				}
+			}
+
 			channel.Feeds = append(channel.Feeds, Feed{
 				BlogName:       feedInfo.Name,
 				RssURL:         feedInfo.URL,
 				AddedAt:        now,
-				LastSentTime:   now,
-				LastPostLink:   "",
+				LastSentTime:   lastSentTime,
+				LastPostLink:   lastPostLink,
 				TotalPostsSent: 0,
 			})
+
+			time.Sleep(500 * time.Millisecond)
 		}
 
 		_, err = channelCollection.InsertOne(ctx, channel)
@@ -167,11 +183,6 @@ func initializeDefaultChannels(ctx context.Context, client *mongo.Client) error 
 }
 
 func fetchAndProcessFeeds(ctx context.Context, client *mongo.Client) (int, error) {
-	err := initializeDefaultChannels(ctx, client)
-	if err != nil {
-		log.Printf("Failed to initialize default channels: %v", err)
-	}
-
 	httpClient := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
@@ -182,6 +193,11 @@ func fetchAndProcessFeeds(ctx context.Context, client *mongo.Client) (int, error
 	fp := gofeed.NewParser()
 	fp.Client = httpClient
 	fp.UserAgent = "Mozilla/5.0 (compatible; FeedNyang/1.0; +https://github.com/nmin11/feednyang)"
+
+	err := initializeDefaultChannels(ctx, client, fp)
+	if err != nil {
+		log.Printf("Failed to initialize default channels: %v", err)
+	}
 	channelCollection := client.Database("feednyang").Collection("discord_channels")
 
 	totalNewItemsCount := 0
