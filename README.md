@@ -44,6 +44,7 @@
    pulumi config set aws:region ap-northeast-2
    pulumi config set default-discord-channel-ids <your-discord-channel-id>
    pulumi config set discord-bot-token <your-discord-bot-token> --secret
+   pulumi config set discord-public-key <your-discord-public-key> --secret
    pulumi config set mongodb-uri <your-mongodb-connection-string> --secret
    ```
 

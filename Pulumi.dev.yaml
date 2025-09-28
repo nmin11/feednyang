@@ -2,6 +2,8 @@ config:
   aws:region: ap-northeast-2
   feednyang:discord-bot-token:
     secure: AAABAPijMLQCru4F0dD0Tq8rzjFF92sjkX+bqv3vlHzMyd/9HNDGMFxmgjcFM2tMjmKTfEezi+4keB2gn6rV8o2qzyPve+V+aKZKrESlCSTQvYUZ2ybWs8e+HtR7QAUINCbJhvPitJo=
-  feednyang:default-discord-channel-ids: "1418622264953409670"
+  feednyang:default-discord-channel-ids: "1418622264953409670,1421860640753975527"
   feednyang:mongodb-uri:
     secure: AAABAKSLJcikxx9mzJnCLrqcyzFIM4qK/WvU7wPwvznZlm0KEN5w4h85bbdsfjOxnHBf8fbhzCsrVd2hhlr2/J6CPpAIeX6EfoF7vl/DLLyAGnFYtGyonTqFAzz1rBVIKHyXI5KdWCJsJ5NIIzp3CACyZp3MsHRK2NU1pTVyOWUNqhPBsNHkOuTjzeadJnNZxRo9lp4McO1T5KTaK7nqhCrknxz2F5rcISQ/zg==
+  feednyang:discord-public-key:
+    secure: AAABAGGRQu5dabA36us/4rABln7aBS8bfMnLRYZ/OhoWrhJPiQAz+wh7465R1BApHF9zzyXmUzNT+s5fTRa14Ge9UeDV0xkOxjHHzZsbk5KIssZ5prCHx+v4U/vGDHPk
