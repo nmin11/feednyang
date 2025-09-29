@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
@@ -43,6 +44,18 @@ type LambdaEvent struct {
 type LambdaResponse struct {
 	StatusCode int    `json:"statusCode"`
 	Body       string `json:"body"`
+}
+
+type channelProcessResult struct {
+	channel     DiscordChannel
+	newItems    int
+	needsUpdate bool
+	err         error
+}
+
+type feedParseResult struct {
+	feed Feed
+	err  error
 }
 
 // 기본 RSS 피드 목록
@@ -110,14 +123,13 @@ func sendDiscordMessage(channelID string, content string) error {
 	return nil
 }
 
-func initializeDefaultChannels(ctx context.Context, client *mongo.Client, fp *gofeed.Parser) error {
+func ensureDefaultChannels(ctx context.Context, channelCollection *mongo.Collection, fp *gofeed.Parser) error {
 	defaultChannelIDs := os.Getenv("DEFAULT_DISCORD_CHANNEL_IDS")
 	if defaultChannelIDs == "" {
 		log.Println("No default channel IDs provided, skipping initialization")
 		return nil
 	}
 
-	channelCollection := client.Database("feednyang").Collection("discord_channels")
 	channelIDs := strings.SplitSeq(defaultChannelIDs, ",")
 
 	for channelID := range channelIDs {
@@ -143,32 +155,52 @@ func initializeDefaultChannels(ctx context.Context, client *mongo.Client, fp *go
 			UpdatedAt: time.Now(),
 		}
 
+		var feedWg sync.WaitGroup
+		feedResults := make(chan feedParseResult, len(techBlogFeeds))
+
 		for _, feedInfo := range techBlogFeeds {
-			now := time.Now()
+			feedWg.Add(1)
+			go func(info struct{ Name, URL string }) {
+				defer feedWg.Done()
 
-			var lastPostLink string
-			var lastSentTime time.Time = now
+				now := time.Now()
+				var lastPostLink string
+				var lastSentTime time.Time = now
 
-			feed, err := fp.ParseURL(feedInfo.URL)
-			if err != nil {
-				log.Printf("Failed to parse feed %s during initialization: %v", feedInfo.Name, err)
-			} else if len(feed.Items) > 0 {
-				lastPostLink = feed.Items[0].Link
-				if feed.Items[0].PublishedParsed != nil {
-					lastSentTime = *feed.Items[0].PublishedParsed
+				feed, err := fp.ParseURL(info.URL)
+				if err != nil {
+					log.Printf("Failed to parse feed %s during initialization: %v", info.Name, err)
+				} else if len(feed.Items) > 0 {
+					lastPostLink = feed.Items[0].Link
+					if feed.Items[0].PublishedParsed != nil {
+						lastSentTime = *feed.Items[0].PublishedParsed
+					}
 				}
-			}
 
-			channel.Feeds = append(channel.Feeds, Feed{
-				BlogName:       feedInfo.Name,
-				RssURL:         feedInfo.URL,
-				AddedAt:        now,
-				LastSentTime:   lastSentTime,
-				LastPostLink:   lastPostLink,
-				TotalPostsSent: 0,
-			})
+				feedResult := feedParseResult{
+					feed: Feed{
+						BlogName:       info.Name,
+						RssURL:         info.URL,
+						AddedAt:        now,
+						LastSentTime:   lastSentTime,
+						LastPostLink:   lastPostLink,
+						TotalPostsSent: 0,
+					},
+					err: err,
+				}
 
-			time.Sleep(500 * time.Millisecond)
+				feedResults <- feedResult
+				time.Sleep(100 * time.Millisecond)
+			}(feedInfo)
+		}
+
+		go func() {
+			feedWg.Wait()
+			close(feedResults)
+		}()
+
+		for result := range feedResults {
+			channel.Feeds = append(channel.Feeds, result.feed)
 		}
 
 		_, err = channelCollection.InsertOne(ctx, channel)
@@ -180,6 +212,74 @@ func initializeDefaultChannels(ctx context.Context, client *mongo.Client, fp *go
 	}
 
 	return nil
+}
+
+func processChannelFeeds(ctx context.Context, channel DiscordChannel, fp *gofeed.Parser) channelProcessResult {
+	channelNewItemsCount := 0
+	needsUpdate := false
+
+	for i, feedConfig := range channel.Feeds {
+		var feed *gofeed.Feed
+		var err error
+
+		for retry := range 3 {
+			feed, err = fp.ParseURLWithContext(feedConfig.RssURL, ctx)
+			if err == nil {
+				break
+			}
+
+			if retry < 2 {
+				waitTime := time.Duration((retry+1)*2) * time.Second
+				log.Printf("Failed to parse feed %s (attempt %d/3): %v. Retrying in %v", feedConfig.BlogName, retry+1, err, waitTime)
+				time.Sleep(waitTime)
+			}
+		}
+
+		if err != nil {
+			log.Printf("Failed to parse feed %s after 3 attempts: %v", feedConfig.BlogName, err)
+			continue
+		}
+
+		time.Sleep(250 * time.Millisecond)
+
+		for _, item := range feed.Items {
+			if feedConfig.LastPostLink == item.Link {
+				break
+			}
+
+			if item.PublishedParsed != nil && item.PublishedParsed.Before(feedConfig.LastSentTime) {
+				continue
+			}
+
+			content := fmt.Sprintf(
+				"📝 %s\n**🚀 %s**\n🔗 %s",
+				feedConfig.BlogName,
+				item.Title,
+				item.Link,
+			)
+
+			err := sendDiscordMessage(channel.ID, content)
+			if err != nil {
+				log.Printf("Failed to send Discord message for item %s to channel %s: %v", item.Title, channel.ID, err)
+				continue
+			}
+
+			channel.Feeds[i].LastSentTime = time.Now()
+			channel.Feeds[i].LastPostLink = item.Link
+			channel.Feeds[i].TotalPostsSent++
+
+			channelNewItemsCount++
+			needsUpdate = true
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+	return channelProcessResult{
+		channel:     channel,
+		newItems:    channelNewItemsCount,
+		needsUpdate: needsUpdate,
+		err:         nil,
+	}
 }
 
 func fetchAndProcessFeeds(ctx context.Context, client *mongo.Client) (int, error) {
@@ -194,11 +294,12 @@ func fetchAndProcessFeeds(ctx context.Context, client *mongo.Client) (int, error
 	fp.Client = httpClient
 	fp.UserAgent = "Mozilla/5.0 (compatible; FeedNyang/1.0; +https://github.com/nmin11/feednyang)"
 
-	err := initializeDefaultChannels(ctx, client, fp)
-	if err != nil {
-		log.Printf("Failed to initialize default channels: %v", err)
-	}
 	channelCollection := client.Database("feednyang").Collection("discord_channels")
+
+	err := ensureDefaultChannels(ctx, channelCollection, fp)
+	if err != nil {
+		log.Printf("Failed to ensure default channels: %v", err)
+	}
 
 	totalNewItemsCount := 0
 
@@ -213,74 +314,44 @@ func fetchAndProcessFeeds(ctx context.Context, client *mongo.Client) (int, error
 		return totalNewItemsCount, fmt.Errorf("failed to decode channels: %v", err)
 	}
 
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, 3)
+	results := make(chan channelProcessResult, len(channels))
+
 	for _, channel := range channels {
-		channelNewItemsCount := 0
+		wg.Add(1)
+		go func(ch DiscordChannel) {
+			defer wg.Done()
 
-		for i, feedConfig := range channel.Feeds {
-			var feed *gofeed.Feed
-			var err error
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
-			for retry := range 3 {
-				feed, err = fp.ParseURLWithContext(feedConfig.RssURL, ctx)
-				if err == nil {
-					break
-				}
+			result := processChannelFeeds(ctx, ch, fp)
+			results <- result
+		}(channel)
+	}
 
-				if retry < 2 {
-					waitTime := time.Duration((retry+1)*2) * time.Second
-					log.Printf("Failed to parse feed %s (attempt %d/3): %v. Retrying in %v", feedConfig.BlogName, retry+1, err, waitTime)
-					time.Sleep(waitTime)
-				}
-			}
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
 
+	for result := range results {
+		if result.err != nil {
+			log.Printf("Error processing channel %s: %v", result.channel.ID, result.err)
+			continue
+		}
+
+		if result.needsUpdate {
+			result.channel.UpdatedAt = time.Now()
+			_, err = channelCollection.ReplaceOne(ctx, bson.M{"_id": result.channel.ID}, result.channel)
 			if err != nil {
-				log.Printf("Failed to parse feed %s after 3 attempts: %v", feedConfig.BlogName, err)
-				continue
-			}
-
-			time.Sleep(1 * time.Second)
-
-			for _, item := range feed.Items {
-				if feedConfig.LastPostLink == item.Link {
-					break
-				}
-
-				if item.PublishedParsed != nil && item.PublishedParsed.Before(feedConfig.LastSentTime) {
-					continue
-				}
-
-				content := fmt.Sprintf(
-					"📝 %s\n**🚀 %s**\n🔗 %s",
-					feedConfig.BlogName,
-					item.Title,
-					item.Link,
-				)
-
-				err := sendDiscordMessage(channel.ID, content)
-				if err != nil {
-					log.Printf("Failed to send Discord message for item %s to channel %s: %v", item.Title, channel.ID, err)
-					continue
-				}
-
-				channel.Feeds[i].LastSentTime = time.Now()
-				channel.Feeds[i].LastPostLink = item.Link
-				channel.Feeds[i].TotalPostsSent++
-
-				channelNewItemsCount++
-				time.Sleep(1 * time.Second)
+				log.Printf("Failed to update channel document for %s: %v", result.channel.ID, err)
 			}
 		}
 
-		if channelNewItemsCount > 0 {
-			channel.UpdatedAt = time.Now()
-			_, err = channelCollection.ReplaceOne(ctx, bson.M{"_id": channel.ID}, channel)
-			if err != nil {
-				log.Printf("Failed to update channel document for %s: %v", channel.ID, err)
-			}
-		}
-
-		totalNewItemsCount += channelNewItemsCount
-		log.Printf("Processed %d new items for channel %s", channelNewItemsCount, channel.ID)
+		totalNewItemsCount += result.newItems
+		log.Printf("Processed %d new items for channel %s", result.newItems, result.channel.ID)
 	}
 
 	return totalNewItemsCount, nil
