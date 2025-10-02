@@ -78,7 +78,7 @@ var techBlogFeeds = []struct {
 	{"NHN Cloud Meetup", "https://meetup.nhncloud.com/rss"},
 	{"ByteByteGo Newsletter", "https://blog.bytebytego.com/feed"},
 	{"Netflix TechBlog", "https://netflixtechblog.com/feed"},
-	{"The GitHub Blog", "https://github.blog/engineering/feed"},
+	{"The GitHub Blog", "https://github.blog/feed"},
 	{"Engineering at Slack", "https://slack.engineering/feed"},
 	{"The Airbnb Tech Blog", "https://medium.com/feed/airbnb-engineering"},
 	{"Spotify Engineering", "https://engineering.atspotify.com/feed"},
@@ -242,6 +242,7 @@ func processChannelFeeds(ctx context.Context, channel DiscordChannel, fp *gofeed
 
 		time.Sleep(250 * time.Millisecond)
 
+		firstItem := true
 		for _, item := range feed.Items {
 			if feedConfig.LastPostLink == item.Link {
 				break
@@ -264,8 +265,11 @@ func processChannelFeeds(ctx context.Context, channel DiscordChannel, fp *gofeed
 				continue
 			}
 
+			if firstItem {
+				channel.Feeds[i].LastPostLink = item.Link
+				firstItem = false
+			}
 			channel.Feeds[i].LastSentTime = time.Now()
-			channel.Feeds[i].LastPostLink = item.Link
 			channel.Feeds[i].TotalPostsSent++
 
 			channelNewItemsCount++
