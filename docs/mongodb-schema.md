@@ -12,6 +12,6 @@
 		}
 	],
 	"createdAt": ISODate("2024-12-30T10:00:00Z"),
-	"updatedAt":ISODate("2024-12-30T10:00:00Z")
+	"updatedAt": ISODate("2024-12-30T10:00:00Z")
 }
 ```
